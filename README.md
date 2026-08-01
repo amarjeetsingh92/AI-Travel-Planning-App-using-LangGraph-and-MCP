@@ -5,7 +5,7 @@ This project extends the Multi-Agent Travel Planning System built in Part 1 by i
 ## Part 1 of This Project
 
 **GitHub Repository:**  
-[https://github.com/codewithaarohi/AI-Travel-Planning-System-using-LangGraph](https://github.com/amarjeetsingh92/AI-Travel-Planning-System-using-LangGraph)
+[https://github.com/amarjeetsingh92/AI-Travel-Planning-System-using-LangGraph](https://github.com/amarjeetsingh92/AI-Travel-Planning-System-using-LangGraph)
 
 
 
