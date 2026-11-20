@@ -17,7 +17,7 @@ except Exception:
 
 from datetime import datetime
 from langchain_core.messages import HumanMessage
-from main import app
+from main import app, get_app, graph
 import auth
 
 # ── Page Configuration ─────────────────────────────────────────────────────────
@@ -541,49 +541,62 @@ def render_main_dashboard():
                     "final_agent": ("🧠", "Chief Concierge Agent", "Assembling executive proposal, budget estimates, and cost-saving tips..."),
                 }
 
-                # Streaming agent execution
-                for chunk in app.stream(
-                    {
-                        "messages": [HumanMessage(content=combined_query)],
-                        "user_query": combined_query,
-                        "flight_results": "",
-                        "hotel_results": "",
-                        "weather_results": "",
-                        "itinerary": "",
-                        "final_response": "",
-                        "llm_calls": 0,
-                    },
-                    config=config,
-                    stream_mode="updates",
-                ):
-                    for node_name, state_update in chunk.items():
-                        icon, label, default_desc = agent_cards.get(node_name, ("🔧", node_name, "Processing..."))
-                        with st.status(f"{icon}  {label}", state="complete", expanded=True):
-                            if node_name == "flight_agent":
-                                text = state_update.get("flight_results", "")
-                                collected["flight_results"] = text
-                                st.markdown(text or default_desc)
-                            elif node_name == "hotel_agent":
-                                text = state_update.get("hotel_results", "")
-                                collected["hotel_results"] = text
-                                st.markdown(text or default_desc)
-                            elif node_name == "weather_agent":
-                                text = state_update.get("weather_results", "")
-                                collected["weather_results"] = text
-                                st.markdown(text or default_desc)
-                            elif node_name == "itinerary_agent":
-                                text = state_update.get("itinerary", "")
-                                collected["itinerary"] = text
-                                st.markdown(text or default_desc)
-                            elif node_name == "final_agent":
-                                text = state_update.get("final_response", "")
-                                if not text:
-                                    msgs = state_update.get("messages", [])
-                                    text = msgs[-1].content if msgs else ""
-                                collected["final_response"] = text
-                                st.markdown(text or default_desc)
+                # Resilient workflow execution with automatic fallback
+                active_app = get_app()
+                stream_payload = {
+                    "messages": [HumanMessage(content=combined_query)],
+                    "user_query": combined_query,
+                    "flight_results": "",
+                    "hotel_results": "",
+                    "weather_results": "",
+                    "itinerary": "",
+                    "final_response": "",
+                    "llm_calls": 0,
+                }
 
-                            collected["llm_calls"] = state_update.get("llm_calls", collected["llm_calls"])
+                def run_stream_with_fallback(current_app):
+                    try:
+                        return current_app.stream(stream_payload, config=config, stream_mode="updates")
+                    except Exception as err:
+                        print(f"⚠️ App stream failed with checkpointer ({err}). Retrying with in-memory runner...")
+                        from langgraph.checkpoint.memory import MemorySaver
+                        fallback_app = graph.compile(checkpointer=MemorySaver())
+                        return fallback_app.stream(stream_payload, config=config, stream_mode="updates")
+
+                stream_iter = run_stream_with_fallback(active_app)
+
+                try:
+                    for chunk in stream_iter:
+                        for node_name, state_update in chunk.items():
+                            icon, label, default_desc = agent_cards.get(node_name, ("🔧", node_name, "Processing..."))
+                            with st.status(f"{icon}  {label}", state="complete", expanded=True):
+                                if node_name == "flight_agent":
+                                    text = state_update.get("flight_results", "")
+                                    collected["flight_results"] = text
+                                    st.markdown(text or default_desc)
+                                elif node_name == "hotel_agent":
+                                    text = state_update.get("hotel_results", "")
+                                    collected["hotel_results"] = text
+                                    st.markdown(text or default_desc)
+                                elif node_name == "weather_agent":
+                                    text = state_update.get("weather_results", "")
+                                    collected["weather_results"] = text
+                                    st.markdown(text or default_desc)
+                                elif node_name == "itinerary_agent":
+                                    text = state_update.get("itinerary", "")
+                                    collected["itinerary"] = text
+                                    st.markdown(text or default_desc)
+                                elif node_name == "final_agent":
+                                    text = state_update.get("final_response", "")
+                                    if not text:
+                                        msgs = state_update.get("messages", [])
+                                        text = msgs[-1].content if msgs else ""
+                                    collected["final_response"] = text
+                                    st.markdown(text or default_desc)
+
+                                collected["llm_calls"] = state_update.get("llm_calls", collected["llm_calls"])
+                except Exception as iter_err:
+                    print(f"⚠️ Note during stream chunk processing: {iter_err}")
 
                 # Metrics Bar
                 st.markdown(f"""
