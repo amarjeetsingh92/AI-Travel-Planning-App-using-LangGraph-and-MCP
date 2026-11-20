@@ -27,6 +27,45 @@ def get_database_url() -> str:
     return (os.getenv("DATABASE_URL") or "").strip()
 
 
+_db_initialized = False
+
+
+def ensure_tables(conn):
+    """Ensure database schema and tables exist."""
+    global _db_initialized
+    if _db_initialized:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS app_users (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(50) UNIQUE NOT NULL,
+                    email VARCHAR(100) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    full_name VARCHAR(100),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS user_trips (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT REFERENCES app_users(id) ON DELETE CASCADE,
+                    destination VARCHAR(100),
+                    query TEXT NOT NULL,
+                    plan_title VARCHAR(255),
+                    flight_results TEXT,
+                    hotel_results TEXT,
+                    weather_results TEXT,
+                    itinerary TEXT,
+                    final_response TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+        _db_initialized = True
+    except Exception as e:
+        print(f"⚠️ [Auth DB] Schema initialization error: {e}")
+
+
 def get_db_connection():
     """Establish and return an autocommit connection to PostgreSQL, or None if unavailable."""
     global _last_db_error
@@ -40,6 +79,7 @@ def get_db_connection():
     try:
         conn = psycopg.connect(url, autocommit=True)
         _last_db_error = ""
+        ensure_tables(conn)
         return conn
     except Exception as e:
         _last_db_error = f"{type(e).__name__}: {str(e)}"
