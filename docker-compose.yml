@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  web:
+    build: .
+    container_name: travel_planner_app
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Connect to PostgreSQL container if db service is enabled:
+      # - DATABASE_URL=postgresql://postgres:postgres@db:5432/langgraph_travel_db
+    volumes:
+      - ./travel_plans:/app/travel_plans
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Optional PostgreSQL service for persistent LangGraph agent memory
+  db:
+    image: postgres:15-alpine
+    container_name: travel_planner_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: langgraph_travel_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
