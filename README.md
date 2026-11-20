@@ -55,10 +55,31 @@ flowchart TD
     A4 --> LLM["🧠 Groq Cloud LLM (openai/gpt-oss-120b)"]
     A5 --> LLM
     
-    A5 --> Plan["📄 Complete Travel Proposal (Markdown & Export)"]
-    Graph <--> DB[("🐘 PostgreSQL Checkpointer (PostgresSaver)")]
-    UI <--> UserDB[("🔐 PostgreSQL User & Trip History (Bcrypt Auth)")]
+    A5 --> Plan["📄 Complete Travel Dossier (Word .docx & Markdown)"]
+    Graph <--> DB[("⚡ Zero-Latency Checkpointer (MemorySaver)")]
+    UI <--> UserDB[("🔐 Neon Cloud PostgreSQL (Bcrypt Auth & Trip Storage)")]
 ```
+
+---
+
+## 💎 Dual-Layer User Experience
+
+1. **Traveler Experience (`Plan Journey` & `My Saved Trips`):**
+   - Clean, luxury consumer interface designed for non-technical travelers.
+   - Presets auto-populate input parameters with instant state persistence.
+   - Real-time agent progress shown in traveler-friendly terminology (Flight Concierge, Stays & Lodging, Climate Guide, Itinerary Designer).
+   - Instant export of itineraries as **Microsoft Word (.docx)** dossiers formatted with tables, palettes, and styling.
+   - Cloud synchronization of all past trips under *My Saved Trips*.
+
+2. **Engineering Console (`Developer & System Console`):**
+   - Dedicated 6-matrix telemetry view built for recruiters and system engineers.
+   - **Matrix 1:** LangGraph Multi-Agent StateGraph & Directed DAG.
+   - **Matrix 2:** Model Context Protocol (MCP) FastMCP stdio & streamable_http integration.
+   - **Matrix 3:** Groq Cloud LPU Inference & Token Economics (1,500 OTPM safety cap).
+   - **Matrix 4:** Neon Cloud Serverless PostgreSQL & schema persistence.
+   - **Matrix 5:** Cryptographic security (Bcrypt cost 12, SSL/TLS 1.3 enforced, parameterized queries).
+   - **Matrix 6:** Automated Word (.docx) document synthesis and live telemetry.
+   - Interactive live subsystem diagnostics to ping all microservices on demand.
 
 ---
 

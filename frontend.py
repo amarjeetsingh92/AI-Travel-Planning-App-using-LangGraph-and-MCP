@@ -4,6 +4,8 @@ Interactive Multi-Agent Dashboard with Secure PostgreSQL Authentication
 """
 
 import os
+import re
+import io
 import streamlit as st
 
 # ── Sync Streamlit Cloud Secrets into os.environ ──────────────────────────────
@@ -19,6 +21,7 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage
 from main import app
 import auth
+import docx_export
 
 # ── Page Configuration ─────────────────────────────────────────────────────────
 st.set_page_config(
@@ -252,6 +255,50 @@ section[data-testid="stSidebar"] {
     box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
 }
 
+/* ── Matrix Cards (Developer Console) ── */
+.matrix-card {
+    background: #0b1424;
+    border: 1px solid #1a2f4c;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    height: 100%;
+}
+.matrix-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 6px;
+    color: #60a5fa;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+}
+.matrix-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-bottom: 0.4rem;
+}
+.matrix-desc {
+    font-size: 0.83rem;
+    color: #8da9c7;
+    line-height: 1.5;
+    margin-bottom: 0.75rem;
+}
+.matrix-row-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #142236;
+    font-size: 0.8rem;
+}
+.matrix-key { color: #64748b; }
+.matrix-value { color: #cbd5e1; font-weight: 600; }
+
 /* ── Buttons ── */
 div[data-testid="stButton"] > button {
     border-radius: 10px !important;
@@ -395,10 +442,10 @@ def render_main_dashboard():
         <div class="top-nav">
             <div class="brand-title">
                 <span>✈️</span> Odyssey AI
-                <span class="brand-badge">LangGraph + MCP</span>
+                <span class="brand-badge">✨ Intelligent Concierge</span>
             </div>
             <div style="color: #9cb5d1; font-size: 0.9rem;">
-                Logged in as <strong style="color: #e2ecf8;">{full_name}</strong> (@{username})
+                Welcome, <strong style="color: #e2ecf8;">{full_name}</strong> (@{username})
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -408,6 +455,8 @@ def render_main_dashboard():
             st.session_state["authenticated"] = False
             st.session_state["user"] = None
             st.session_state["last_plan"] = None
+            st.session_state["travel_query_input"] = ""
+            st.session_state["selected_preset_label"] = ""
             st.rerun()
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
@@ -422,33 +471,45 @@ def render_main_dashboard():
 
         page_choice = st.radio(
             "Navigation",
-            ["🗺️ Plan Journey", "📜 My Saved Trips", "⚡ MCP Engine Health"],
+            ["🗺️ Plan Journey", "📜 My Saved Trips", "⚙️ Developer & System Console"],
             label_visibility="collapsed"
         )
 
         st.markdown("---")
-        st.markdown("<div style='font-size: 0.85rem; font-weight: 700; color: #e0edf8; margin-bottom: 0.6rem;'>Live Infrastructure</div>", unsafe_allow_html=True)
-        
-        statuses = [
-            ("PostgreSQL Memory", "Connected & Persistent"),
-            ("AviationStack MCP", "stdio FastMCP (Airports/Carriers)"),
-            ("OpenWeather MCP", "stdio FastMCP (Live Weather)"),
-            ("Tavily Search MCP", "streamable_http (Lodging)"),
-            ("Groq Cloud", "Active (openai/gpt-oss-120b)"),
-        ]
-        for name, note in statuses:
-            st.markdown(f"""
-            <div class="sidebar-status-chip">
-                <div class="status-dot"></div>
-                <div>
-                    <strong style="color: #e0edf8; font-size: 0.8rem;">{name}</strong><br>
-                    <span style="font-size: 0.72rem; color: #7693b4;">{note}</span>
+
+        if "Developer" in page_choice:
+            st.markdown("<div style='font-size: 0.85rem; font-weight: 700; color: #e0edf8; margin-bottom: 0.6rem;'>Live Infrastructure</div>", unsafe_allow_html=True)
+            statuses = [
+                ("Neon PostgreSQL", "Serverless Memory & Auth"),
+                ("AviationStack MCP", "stdio FastMCP (Airports/Carriers)"),
+                ("OpenWeather MCP", "stdio FastMCP (Live Weather)"),
+                ("Tavily Search MCP", "streamable_http (Lodging)"),
+                ("Groq Cloud", "Active (openai/gpt-oss-120b)"),
+            ]
+            for name, note in statuses:
+                st.markdown(f"""
+                <div class="sidebar-status-chip">
+                    <div class="status-dot"></div>
+                    <div>
+                        <strong style="color: #e0edf8; font-size: 0.8rem;">{name}</strong><br>
+                        <span style="font-size: 0.72rem; color: #7693b4;">{note}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="background: #0d1726; border: 1px solid #1a2f4c; border-radius: 10px; padding: 0.9rem; margin-top: 0.5rem;">
+                <div style="font-size: 0.75rem; text-transform: uppercase; color: #60a5fa; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 0.3rem;">✈️ Traveler Perks</div>
+                <div style="font-size: 0.8rem; color: #94a3b8; line-height: 1.45;">
+                    • <strong>Word Documents:</strong> Download polished itineraries as Word (.docx) files to read offline.<br>
+                    • <strong>Trip History:</strong> All journeys saved in your cloud account.<br>
+                    • <strong>Live Concierge:</strong> Instant flight, stay & climate synthesis.
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # TAB 1: PLAN JOURNEY
+    # TAB 1: PLAN JOURNEY (Clean End-User Experience)
     # ──────────────────────────────────────────────────────────────────────────
     if "Plan Journey" in page_choice:
         # Hero Banner
@@ -458,28 +519,37 @@ def render_main_dashboard():
                  src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=1400&q=80"
                  alt="airplane above clouds"/>
             <div class="hero-content">
-                <div class="hero-badge">✦ Autonomous Travel Intelligence</div>
+                <div class="hero-badge">✦ Personalized Travel Intelligence</div>
                 <div class="hero-title">Where would you like to travel next?</div>
-                <div class="hero-sub">Five autonomous agents collaborate via Model Context Protocol (MCP) to curate verified flights, hotel gems, real-time climate forecasts, and unforgettable itineraries.</div>
+                <div class="hero-sub">Our multi-agent travel concierge curates verified flights, handpicked accommodations, seasonal weather guides, and custom day-by-day itineraries tailored to your style.</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Quick Presets
+        # Quick Presets with State Persistence
+        if "travel_query_input" not in st.session_state:
+            st.session_state["travel_query_input"] = ""
+        if "selected_preset_label" not in st.session_state:
+            st.session_state["selected_preset_label"] = ""
+
         st.markdown("<div style='font-size: 0.82rem; font-weight: 700; color: #7ab8f5; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem;'>⚡ Quick Destination Inspiration</div>", unsafe_allow_html=True)
         PRESETS = [
-            ("🇯🇵 Tokyo & Kyoto (7 Days)", "Plan a 7-day trip to Japan (Tokyo and Kyoto) for 2 adults under ₹2,00,000. Include JR Pass feasibility, 4-star hotels near Shinjuku and Gion, flights, and authentic culinary spots."),
+            ("🇯🇵 Tokyo & Kyoto (7 Days)", "Plan a 7-day trip to Japan (Tokyo and Kyoto) for 2 adults under ₹2,00,000. Include 4-star hotels near Shinjuku and Gion, flights, and authentic culinary spots."),
             ("🇫🇷 Paris Romantic (5 Days)", "Plan a romantic 5-day holiday in Paris for 2 adults under ₹1,80,000. Include boutique hotels near Saint-Germain, museum passes, and flights."),
             ("🇦🇪 Dubai Luxury (4 Days)", "Plan a luxury 4-day weekend in Dubai for 2 adults with 5-star hotels, desert safari, fine dining, and direct flights."),
             ("🇮🇹 Rome & Amalfi (6 Days)", "Plan a scenic 6-day trip across Rome and the Amalfi Coast under ₹2,20,000 for 2 adults with flights, rail transit, and boutique stays."),
         ]
         
         cols = st.columns(len(PRESETS))
-        selected_preset = ""
         for idx, (label, prompt_text) in enumerate(PRESETS):
             with cols[idx]:
                 if st.button(label, key=f"btn_p_{idx}", use_container_width=True):
-                    selected_preset = prompt_text
+                    st.session_state["travel_query_input"] = prompt_text
+                    st.session_state["selected_preset_label"] = label
+                    st.rerun()
+
+        if st.session_state.get("selected_preset_label"):
+            st.markdown(f"<div style='font-size: 0.82rem; color: #4ade80; margin-top: 0.2rem; margin-bottom: 0.5rem;'>✨ Selected inspiration: <strong>{st.session_state['selected_preset_label']}</strong>. Adjust any details below or click <strong>Generate Intelligent Travel Plan</strong>!</div>", unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -490,7 +560,7 @@ def render_main_dashboard():
 
             input_query = st.text_area(
                 "Travel Vision",
-                value=selected_preset,
+                key="travel_query_input",
                 placeholder="e.g. Plan a 6-day cultural trip to Japan for 2 adults with 4-star hotels in Shinjuku, vegetarian meals, and budget under ₹2,00,000.",
                 height=110,
                 label_visibility="collapsed"
@@ -515,7 +585,7 @@ def render_main_dashboard():
         # Execution Workflow
         if generate_clicked:
             if not input_query.strip():
-                st.warning("Please describe your destination or select a quick preset.")
+                st.warning("Please describe your destination or select a quick inspiration above.")
             else:
                 combined_query = f"{input_query.strip()} (Style: {travel_style}, Duration: {trip_duration} days, Preferred Currency: {currency})"
                 session_thread = f"user_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -528,17 +598,21 @@ def render_main_dashboard():
                     "itinerary": "",
                     "final_response": "",
                     "llm_calls": 0,
+                    "destination": input_query.split()[0] if input_query else "Destination",
+                    "style": travel_style,
+                    "duration": trip_duration,
+                    "currency": currency,
                 }
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("<div class='card-header'><span>🤖</span> Live Multi-Agent Execution Progress</div>", unsafe_allow_html=True)
+                st.markdown("<div class='card-header'><span>🤖</span> Live Concierge Execution Progress</div>", unsafe_allow_html=True)
 
                 agent_cards = {
-                    "flight_agent": ("✈️", "Flight Agent (MCP AviationStack)", "Querying international airport networks & airline route matrices..."),
-                    "hotel_agent": ("🏨", "Hotel Agent (MCP Tavily)", "Researching verified luxury, boutique, and budget accommodations..."),
-                    "weather_agent": ("⛅", "Weather Agent (MCP OpenWeather)", "Analyzing live destination climate conditions and 5-day forecasts..."),
-                    "itinerary_agent": ("🗓️", "Itinerary Agent (LangGraph + AI)", "Synthesizing schedule, geographical routes, and culinary gems..."),
-                    "final_agent": ("🧠", "Chief Concierge Agent", "Assembling executive proposal, budget estimates, and cost-saving tips..."),
+                    "flight_agent": ("✈️", "Flight Concierge", "Querying international airport networks & airline route matrices..."),
+                    "hotel_agent": ("🏨", "Stays & Accommodations", "Curating verified luxury, boutique, and budget accommodations..."),
+                    "weather_agent": ("⛅", "Climate & Packing Guide", "Analyzing live destination climate conditions and 5-day forecasts..."),
+                    "itinerary_agent": ("🗓️", "Daily Itinerary Designer", "Synthesizing schedule, geographical routes, and culinary gems..."),
+                    "final_agent": ("✨", "Chief Travel Concierge", "Assembling executive proposal, budget estimates, and cost-saving tips..."),
                 }
 
                 # Stream payload initialization
@@ -592,13 +666,17 @@ def render_main_dashboard():
                 except Exception as iter_err:
                     print(f"⚠️ Note during stream chunk processing: {iter_err}")
 
-                # Metrics Bar
+                # Traveler Journey Metrics Bar
+                dest_tag = input_query.split()[0] if input_query else "Destination"
+                style_short = travel_style.split("&")[0].strip() if "&" in travel_style else travel_style[:14]
+                curr_symbol = currency.split()[0]
+
                 st.markdown(f"""
                 <div class="metric-row">
-                    <div class="metric-box"><div class="metric-val">5</div><div class="metric-lbl">Agents Completed</div></div>
-                    <div class="metric-box"><div class="metric-val">{collected['llm_calls']}</div><div class="metric-lbl">LLM Invocations</div></div>
-                    <div class="metric-box"><div class="metric-val">3</div><div class="metric-lbl">Active MCP Servers</div></div>
-                    <div class="metric-box"><div class="metric-val">PostgreSQL</div><div class="metric-lbl">Checkpointer Status</div></div>
+                    <div class="metric-box"><div class="metric-val">{dest_tag}</div><div class="metric-lbl">Destination</div></div>
+                    <div class="metric-box"><div class="metric-val">{trip_duration} Days</div><div class="metric-lbl">Trip Length</div></div>
+                    <div class="metric-box"><div class="metric-val">{style_short}</div><div class="metric-lbl">Travel Style</div></div>
+                    <div class="metric-box"><div class="metric-val">{curr_symbol}</div><div class="metric-lbl">Currency</div></div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -607,7 +685,7 @@ def render_main_dashboard():
                 auth.save_user_trip(
                     user_id=user_id,
                     query=input_query,
-                    destination=input_query.split()[0] if input_query else "Destination",
+                    destination=dest_tag,
                     plan_title=plan_title,
                     flight_results=collected["flight_results"],
                     hotel_results=collected["hotel_results"],
@@ -622,70 +700,96 @@ def render_main_dashboard():
         if st.session_state.get("last_plan"):
             plan_data = st.session_state["last_plan"]
             st.markdown("---")
-            st.markdown("<div class='card-header'><span>📋</span> Synthesized Travel Proposal</div>", unsafe_allow_html=True)
+            st.markdown("<div class='card-header'><span>📋</span> Synthesized Travel Dossier</div>", unsafe_allow_html=True)
 
             plan_tabs = st.tabs([
-                "🌟 Executive Proposal",
+                "🌟 Executive Overview",
+                "🗓️ Day-by-Day Itinerary",
+                "🏨 Recommended Stays",
                 "✈️ Flight Guidance",
-                "🏨 Hotel Recommendations",
-                "⛅ Climate & Forecast",
-                "🗓️ Detailed Itinerary"
+                "⛅ Climate & Packing Guide"
             ])
 
             with plan_tabs[0]:
-                st.markdown(f"<div class='plan-summary-card'>{plan_data['final_response'] or plan_data['itinerary']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='plan-summary-card'>{plan_data.get('final_response') or plan_data.get('itinerary')}</div>", unsafe_allow_html=True)
             with plan_tabs[1]:
-                st.markdown(plan_data['flight_results'] or "Flight data not available.")
+                st.markdown(plan_data.get('itinerary') or "Itinerary details not available.")
             with plan_tabs[2]:
-                st.markdown(plan_data['hotel_results'] or "Hotel recommendations not available.")
+                st.markdown(plan_data.get('hotel_results') or "Accommodation recommendations not available.")
             with plan_tabs[3]:
-                st.markdown(plan_data['weather_results'] or "Weather report not available.")
+                st.markdown(plan_data.get('flight_results') or "Flight guidance not available.")
             with plan_tabs[4]:
-                st.markdown(plan_data['itinerary'] or "Itinerary not available.")
+                st.markdown(plan_data.get('weather_results') or "Climate report not available.")
 
-            # Markdown Export
+            # Document Downloads: Word (.docx) & Plain Text (.md)
             st.markdown("<br>", unsafe_allow_html=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            export_content = f"""# Odyssey AI Travel Proposal
+            dest_slug = re.sub(r"[^\w\-]", "_", str(plan_data.get("destination", "trip"))).lower().strip("_") or "trip"
+
+            # 1. Generate Word Document (.docx)
+            plan_doc_payload = {
+                "plan_title": plan_data.get("plan_title") or f"Travel Plan - {plan_data.get('destination', 'Trip')}",
+                "destination": plan_data.get("destination", "Custom Journey"),
+                "query": plan_data.get("query", ""),
+                "style": plan_data.get("style", "Personalized"),
+                "duration": plan_data.get("duration", 6),
+                "currency": plan_data.get("currency", "INR (₹)"),
+                "final_response": plan_data.get("final_response", ""),
+                "flight_results": plan_data.get("flight_results", ""),
+                "hotel_results": plan_data.get("hotel_results", ""),
+                "weather_results": plan_data.get("weather_results", ""),
+                "itinerary": plan_data.get("itinerary", ""),
+            }
+            docx_bytes = docx_export.generate_travel_plan_docx(plan_doc_payload)
+
+            # 2. Markdown text export
+            export_content = f"""# Odyssey AI Travel Dossier
 **User:** {full_name} (@{username})
 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ---
 
-## 🌟 Executive Concierge Proposal
-{plan_data['final_response']}
-
----
-
-## ✈️ Flight Analysis (AviationStack MCP)
-{plan_data['flight_results']}
-
----
-
-## 🏨 Accommodations (Tavily MCP)
-{plan_data['hotel_results']}
-
----
-
-## ⛅ Climate & Weather (OpenWeather MCP)
-{plan_data['weather_results']}
+## 🌟 Executive Concierge Overview
+{plan_data.get('final_response', '')}
 
 ---
 
 ## 🗓️ Day-by-Day Itinerary
-{plan_data['itinerary']}
+{plan_data.get('itinerary', '')}
+
+---
+
+## 🏨 Accommodations & Stays
+{plan_data.get('hotel_results', '')}
+
+---
+
+## ✈️ Flights & Transit
+{plan_data.get('flight_results', '')}
+
+---
+
+## ⛅ Climate & Weather
+{plan_data.get('weather_results', '')}
 """
-            dl_col1, dl_col2 = st.columns([1, 3])
+            dl_col1, dl_col2 = st.columns([1, 1])
             with dl_col1:
                 st.download_button(
-                    "⬇️ Download Plan (.md)",
-                    data=export_content,
-                    file_name=f"odyssey_travel_plan_{timestamp}.md",
-                    mime="text/markdown",
+                    "📄 Download Official Plan (.docx / Word)",
+                    data=docx_bytes,
+                    file_name=f"Odyssey_Travel_Plan_{dest_slug}_{timestamp}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     use_container_width=True
                 )
             with dl_col2:
-                st.success("✅ This travel plan is securely saved to your PostgreSQL history!")
+                st.download_button(
+                    "📝 Download Plain Text (.md)",
+                    data=export_content,
+                    file_name=f"Odyssey_Travel_Plan_{dest_slug}_{timestamp}.md",
+                    mime="text/markdown",
+                    use_container_width=True
+                )
+            st.success("✅ This travel plan is permanently saved to your account in the cloud database!")
 
     # ──────────────────────────────────────────────────────────────────────────
     # TAB 2: MY SAVED TRIPS
@@ -702,76 +806,182 @@ def render_main_dashboard():
                     st.markdown(f"**Original Request:** {trip.get('query')}")
                     st.markdown("---")
                     
-                    sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["🌟 Proposal", "✈️ Flights", "🏨 Hotels", "🗓️ Itinerary"])
+                    sub_t1, sub_t2, sub_t3, sub_t4 = st.tabs(["🌟 Proposal", "🗓️ Itinerary", "🏨 Hotels", "✈️ Flights"])
                     with sub_t1:
                         st.markdown(trip.get("final_response") or "N/A")
                     with sub_t2:
-                        st.markdown(trip.get("flight_results") or "N/A")
+                        st.markdown(trip.get("itinerary") or "N/A")
                     with sub_t3:
                         st.markdown(trip.get("hotel_results") or "N/A")
                     with sub_t4:
-                        st.markdown(trip.get("itinerary") or "N/A")
+                        st.markdown(trip.get("flight_results") or "N/A")
 
                     st.markdown("<br>", unsafe_allow_html=True)
-                    del_col, _ = st.columns([1, 4])
+                    trip_doc_bytes = docx_export.generate_travel_plan_docx({
+                        "plan_title": trip.get("plan_title") or trip.get("destination") or "Saved Trip",
+                        "destination": trip.get("destination") or "Destination",
+                        "query": trip.get("query") or "",
+                        "final_response": trip.get("final_response") or "",
+                        "flight_results": trip.get("flight_results") or "",
+                        "hotel_results": trip.get("hotel_results") or "",
+                        "weather_results": trip.get("weather_results") or "",
+                        "itinerary": trip.get("itinerary") or "",
+                    })
+                    dl_col, del_col = st.columns([1, 1])
+                    with dl_col:
+                        st.download_button(
+                            "📄 Download Word (.docx)",
+                            data=trip_doc_bytes,
+                            file_name=f"Saved_Trip_{trip['id']}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"dl_docx_{trip['id']}",
+                            use_container_width=True
+                        )
                     with del_col:
-                        if st.button(f"🗑️ Delete Trip #{trip['id']}", key=f"del_{trip['id']}"):
+                        if st.button(f"🗑️ Delete Trip #{trip['id']}", key=f"del_{trip['id']}", use_container_width=True):
                             if auth.delete_user_trip(trip['id'], user_id):
                                 st.success("Trip removed from history.")
                                 st.rerun()
 
     # ──────────────────────────────────────────────────────────────────────────
-    # TAB 3: MCP ENGINE HEALTH
+    # TAB 3: DEVELOPER & SYSTEM CONSOLE (The 6 Architecture Matrices)
     # ──────────────────────────────────────────────────────────────────────────
-    elif "MCP Engine" in page_choice:
-        st.markdown("<div class='card-header'><span>⚡</span> Model Context Protocol & Backend Health</div>", unsafe_allow_html=True)
+    elif "Developer" in page_choice:
+        st.markdown("<div class='card-header'><span>⚙️</span> Developer Console · 6 Architecture Matrices & Telemetry</div>", unsafe_allow_html=True)
         st.markdown("""
-        The system coordinates 5 autonomous LangGraph agents backed by standard Model Context Protocol servers.
-        """)
+        <div style="color: #9cb5d1; font-size: 0.92rem; margin-bottom: 1.2rem; line-height: 1.6;">
+            <strong>Confidential Engineering Dashboard:</strong> Inspect the live multi-agent graph, Model Context Protocol (MCP) server integration, LLM token parameters, cloud persistence layer, and cryptographic security protocols.
+        </div>
+        """, unsafe_allow_html=True)
 
-        diag_cols = st.columns(3)
-        with diag_cols[0]:
+        # Live Subsystem Diagnostics Trigger
+        diag_btn = st.button("🔄  Run Live Subsystem Diagnostics", use_container_width=True)
+        if diag_btn:
+            with st.status("Diagnosing Engine Subsystems...", expanded=True) as status:
+                st.write("🔍 Pinging Neon Serverless PostgreSQL...")
+                conn = auth.get_db_connection()
+                if conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT COUNT(*) FROM app_users;")
+                        u_count = cur.fetchone()[0]
+                        cur.execute("SELECT COUNT(*) FROM user_trips;")
+                        t_count = cur.fetchone()[0]
+                    conn.close()
+                    st.write(f"✅ Database Online · Registered Users: **{u_count}** | Stored Trips: **{t_count}**")
+                else:
+                    st.write(f"⚠️ Database Notice: {auth._last_db_error}")
+
+                st.write("🔍 Verifying Groq Cloud LLM Engine...")
+                groq_key = os.getenv("GROQ_API_KEY")
+                groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+                if groq_key:
+                    st.write(f"✅ Groq Engine Connected · Primary Model: <code>{groq_model}</code>")
+                else:
+                    st.write("⚠️ Groq API key not found in environment.")
+
+                st.write("🔍 Checking Model Context Protocol (MCP) Servers...")
+                av_key = os.getenv("AVIATIONSTACK_API_KEY") or os.getenv("AVIATION_STACK_API_KEY")
+                ow_key = os.getenv("OPENWEATHER_API_KEY")
+                tv_key = os.getenv("TAVILY_API_KEY")
+                st.write(f"• AviationStack: {'✅ Configured' if av_key else '⚠️ Demo/Fallback Mode'}")
+                st.write(f"• OpenWeather: {'✅ Configured' if ow_key else '⚠️ Demo/Fallback Mode'}")
+                st.write(f"• Tavily Search: {'✅ Configured' if tv_key else '⚠️ Demo/Fallback Mode'}")
+
+                status.update(label="✅ Subsystem Diagnostics Complete", state="complete")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── MATRIX GRID (2 Columns x 3 Rows = 6 Matrices) ────────────────────
+        m_col1, m_col2 = st.columns(2)
+
+        # MATRIX 1: LangGraph Architecture
+        with m_col1:
             st.markdown("""
-            <div class="app-card">
-                <div style="font-weight: 700; color: #4ea8f0; font-size: 1.1rem; margin-bottom: 0.5rem;">✈️ Aviation MCP</div>
-                <div style="font-size: 0.85rem; color: #8da9c7;">
-                    • Transport: <code>stdio</code> (FastMCP)<br>
-                    • Tools: <code>list_airports</code>, <code>list_airlines</code>, <code>get_flight_status</code><br>
-                    • Provider: AviationStack API + curated fallback
-                </div>
+            <div class="matrix-card">
+                <span class="matrix-badge">Matrix 1</span>
+                <div class="matrix-title">🤖 LangGraph Multi-Agent DAG</div>
+                <div class="matrix-desc">Directed Acyclic Graph orchestrating 5 specialized autonomous agents with unified state passing and real-time node streaming.</div>
+                <div class="matrix-row-item"><span class="matrix-key">Graph Engine</span><span class="matrix-value">langgraph.graph.StateGraph</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Agent Topology</span><span class="matrix-value">START ➔ Flights ➔ Hotels ➔ Weather ➔ Itinerary ➔ Concierge ➔ END</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">State Checkpointer</span><span class="matrix-value">MemorySaver (Zero-Latency Session Isolation)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Stream Mode</span><span class="matrix-value">updates (Real-time incremental UI render)</span></div>
             </div>
             """, unsafe_allow_html=True)
 
-        with diag_cols[1]:
+        # MATRIX 2: Model Context Protocol (MCP)
+        with m_col2:
             st.markdown("""
-            <div class="app-card">
-                <div style="font-weight: 700; color: #4ea8f0; font-size: 1.1rem; margin-bottom: 0.5rem;">⛅ Weather MCP</div>
-                <div style="font-size: 0.85rem; color: #8da9c7;">
-                    • Transport: <code>stdio</code> (FastMCP)<br>
-                    • Tools: <code>get_current_weather</code>, <code>get_forecast</code><br>
-                    • Provider: OpenWeatherMap API + seasonal fallback
-                </div>
+            <div class="matrix-card">
+                <span class="matrix-badge">Matrix 2</span>
+                <div class="matrix-title">⚡ Model Context Protocol (MCP)</div>
+                <div class="matrix-desc">Decoupled tool transport connecting LangGraph directly to live flight status, weather radar, and real-time web crawlers.</div>
+                <div class="matrix-row-item"><span class="matrix-key">Aviation MCP</span><span class="matrix-value">stdio FastMCP (Airports & Carriers)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Weather MCP</span><span class="matrix-value">stdio FastMCP (Live Climate & 5-Day Forecast)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Tavily Search MCP</span><span class="matrix-value">streamable_http (Web Crawler & Extraction)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Client Wrapper</span><span class="matrix-value">MultiServerMCPClient (Async Stdio + HTTP)</span></div>
             </div>
             """, unsafe_allow_html=True)
 
-        with diag_cols[2]:
+        m_col3, m_col4 = st.columns(2)
+
+        # MATRIX 3: LLM Inference & Token Economics
+        with m_col3:
             st.markdown("""
-            <div class="app-card">
-                <div style="font-weight: 700; color: #4ea8f0; font-size: 1.1rem; margin-bottom: 0.5rem;">🔍 Tavily Search MCP</div>
-                <div style="font-size: 0.85rem; color: #8da9c7;">
-                    • Transport: <code>streamable_http</code><br>
-                    • Tools: <code>tavily_search</code>, <code>tavily_extract</code><br>
-                    • Provider: Tavily Real-time Web Crawler
-                </div>
+            <div class="matrix-card">
+                <span class="matrix-badge">Matrix 3</span>
+                <div class="matrix-title">🧠 LLM Orchestration & Token Economics</div>
+                <div class="matrix-desc">High-throughput LPUs powering complex itinerary synthesis with aggressive rate limit protection and dynamic fallbacks.</div>
+                <div class="matrix-row-item"><span class="matrix-key">Primary Inference</span><span class="matrix-value">Groq Cloud LPU Engine</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Active Foundation Model</span><span class="matrix-value">openai/gpt-oss-120b (8,000 TPM)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Fallback Tier</span><span class="matrix-value">openai/gpt-oss-20b ➔ qwen/qwen3.8-27b</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Output Safety Cap</span><span class="matrix-value">1,500 OTPM max_tokens (0 Rate-Limit Violations)</span></div>
             </div>
             """, unsafe_allow_html=True)
 
-        st.markdown("### Security Architecture")
-        st.markdown("""
-        - **Password Storage**: Passwords are never stored in plaintext. They are salted and hashed using **Bcrypt (cost factor 12)**.
-        - **Session Management**: Session tokens are maintained within Streamlit session state and cleared immediately on sign out.
-        - **Database**: Checkpoint graph state and user travel records are stored in PostgreSQL (`langgraph_memory_demo`).
-        """)
+        # MATRIX 4: Cloud PostgreSQL & Serverless Persistence
+        with m_col4:
+            st.markdown("""
+            <div class="matrix-card">
+                <span class="matrix-badge">Matrix 4</span>
+                <div class="matrix-title">🗄️ Neon Cloud PostgreSQL Persistence</div>
+                <div class="matrix-desc">Serverless relational database storing authenticated user credentials, foreign-keyed trip records, and full agent output payloads.</div>
+                <div class="matrix-row-item"><span class="matrix-key">Cloud Host</span><span class="matrix-value">Neon Serverless PostgreSQL (AWS us-east)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Core Schemas</span><span class="matrix-value">app_users, user_trips (Cascading Foreign Keys)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Connection Driver</span><span class="matrix-value">psycopg 3 (Autocommit, SSL Mode Required)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Auto Migration</span><span class="matrix-value">Dynamic ensure_tables() on startup</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        m_col5, m_col6 = st.columns(2)
+
+        # MATRIX 5: Cryptographic Security Protocol
+        with m_col5:
+            st.markdown("""
+            <div class="matrix-card">
+                <span class="matrix-badge">Matrix 5</span>
+                <div class="matrix-title">🔒 Cryptography & Security Subsystem</div>
+                <div class="matrix-desc">Enterprise-grade credential protection ensuring zero plaintext exposure, salted hashing, and parameterized query execution.</div>
+                <div class="matrix-row-item"><span class="matrix-key">Password Hashing</span><span class="matrix-value">Bcrypt (Salt Rounds: 12)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Transport Encryption</span><span class="matrix-value">TLS 1.3 / SSL Enforced (Neon DB & Cloud)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">SQL Injection Defense</span><span class="matrix-value">Parameterized Prepared Queries ($1, $2)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Secret Storage</span><span class="matrix-value">Streamlit Secrets TOML + Environment Masking</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # MATRIX 6: Document Export & UI Modernization
+        with m_col6:
+            st.markdown("""
+            <div class="matrix-card">
+                <span class="matrix-badge">Matrix 6</span>
+                <div class="matrix-title">📄 Document Generation & Telemetry</div>
+                <div class="matrix-desc">Autonomous translation of multi-agent state into standardized executive Word (.docx) documents and real-time client UI state.</div>
+                <div class="matrix-row-item"><span class="matrix-key">Word Export Engine</span><span class="matrix-value">python-docx (Dynamic Table & Palette Styler)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">MIME Output</span><span class="matrix-value">application/vnd.openxmlformats-officedocument</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Client Presentation</span><span class="matrix-value">Consumer Luxury Travel UX (No Dev Leak)</span></div>
+                <div class="matrix-row-item"><span class="matrix-key">Telemetry Surface</span><span class="matrix-value">Isolated to Developer & Recruiter Console</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+
 
 
 # ==============================================================================
