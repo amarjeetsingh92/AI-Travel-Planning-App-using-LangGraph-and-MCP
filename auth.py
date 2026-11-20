@@ -11,17 +11,38 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+_last_db_error = ""
+
+
+def get_database_url() -> str:
+    """Dynamically resolve DATABASE_URL from Streamlit secrets or os.environ."""
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "DATABASE_URL" in st.secrets:
+            val = str(st.secrets["DATABASE_URL"]).strip()
+            if val:
+                return val
+    except Exception:
+        pass
+    return (os.getenv("DATABASE_URL") or "").strip()
 
 
 def get_db_connection():
     """Establish and return an autocommit connection to PostgreSQL, or None if unavailable."""
-    if not DATABASE_URL or DATABASE_URL.startswith("your_") or "postgres:postgres@" in DATABASE_URL:
+    global _last_db_error
+    url = get_database_url()
+    if not url:
+        _last_db_error = "DATABASE_URL is not configured in Streamlit Secrets or environment variables."
+        return None
+    if url.startswith("your_") or "postgres:postgres@" in url:
+        _last_db_error = "DATABASE_URL is set to a default placeholder."
         return None
     try:
-        conn = psycopg.connect(DATABASE_URL, autocommit=True)
+        conn = psycopg.connect(url, autocommit=True)
+        _last_db_error = ""
         return conn
     except Exception as e:
+        _last_db_error = f"{type(e).__name__}: {str(e)}"
         print(f"⚠️ [Auth DB] Database connection error: {e}")
         return None
 
@@ -109,7 +130,8 @@ def register_user(username: str, email: str, password: str, full_name: str = "")
 
     conn = get_db_connection()
     if not conn:
-        return False, "Database is currently offline. Please check your PostgreSQL connection."
+        err = _last_db_error or "Database connection failed"
+        return False, f"Database connection issue: {err}"
 
     username_clean = username.strip().lower()
     email_clean = email.strip().lower()
@@ -145,7 +167,8 @@ def authenticate_user(identifier: str, password: str) -> tuple[dict | None, str]
 
     conn = get_db_connection()
     if not conn:
-        return None, "Database is currently offline."
+        err = _last_db_error or "Database connection failed"
+        return None, f"Database connection issue: {err}"
 
     clean_id = identifier.strip().lower()
 

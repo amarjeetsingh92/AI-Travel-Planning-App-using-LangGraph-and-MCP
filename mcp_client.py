@@ -7,10 +7,24 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 load_dotenv(override=True)
 
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
-AVIATION_STACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY") or os.getenv("AVIATION_STACK_API_KEY")
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+def get_config_val(key: str, default: str = "") -> str:
+    """Read a setting from Streamlit secrets or os.environ."""
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            val = str(st.secrets[key]).strip()
+            if val:
+                return val
+    except Exception:
+        pass
+    return (os.getenv(key) or default).strip()
+
+
+TAVILY_API_KEY = get_config_val("TAVILY_API_KEY")
+AVIATION_STACK_API_KEY = get_config_val("AVIATIONSTACK_API_KEY") or get_config_val("AVIATION_STACK_API_KEY")
+OPENWEATHER_API_KEY = get_config_val("OPENWEATHER_API_KEY")
+GROQ_API_KEY = get_config_val("GROQ_API_KEY")
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 AVIATION_SERVER_SCRIPT = os.path.join(CURRENT_DIR, "custom_aviation_mcp_server.py")

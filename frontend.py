@@ -5,6 +5,16 @@ Interactive Multi-Agent Dashboard with Secure PostgreSQL Authentication
 
 import os
 import streamlit as st
+
+# ── Sync Streamlit Cloud Secrets into os.environ ──────────────────────────────
+try:
+    if hasattr(st, "secrets"):
+        for k, v in st.secrets.items():
+            if isinstance(v, str):
+                os.environ[k] = v
+except Exception:
+    pass
+
 from datetime import datetime
 from langchain_core.messages import HumanMessage
 from main import app

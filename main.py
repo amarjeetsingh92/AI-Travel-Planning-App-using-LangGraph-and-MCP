@@ -42,17 +42,31 @@ from mcp_client import (
 
 load_dotenv(override=True)
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b"
+def get_config_val(key: str, default: str = "") -> str:
+    """Read a config setting from Streamlit Cloud secrets or os.environ."""
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            val = str(st.secrets[key]).strip()
+            if val:
+                return val
+    except Exception:
+        pass
+    return (os.getenv(key) or default).strip()
+
+
+DATABASE_URL = get_config_val("DATABASE_URL")
+GROQ_API_KEY = get_config_val("GROQ_API_KEY")
+GROQ_MODEL = get_config_val("GROQ_MODEL", "openai/gpt-oss-120b")
 
 
 def get_llm(model_name: str = None):
     """Safely initialize Groq LLM with api_key validation and model fallback."""
-    if not GROQ_API_KEY or GROQ_API_KEY.startswith("your_"):
+    key = get_config_val("GROQ_API_KEY")
+    if not key or key.startswith("your_"):
         return None
     candidates = [
-        model_name or GROQ_MODEL,
+        model_name or get_config_val("GROQ_MODEL", "openai/gpt-oss-120b"),
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "qwen/qwen3.8-27b",
@@ -63,7 +77,7 @@ def get_llm(model_name: str = None):
             continue
         seen.add(m)
         try:
-            return ChatGroq(model=m, api_key=GROQ_API_KEY, max_tokens=1500)
+            return ChatGroq(model=m, api_key=key, max_tokens=1500)
         except Exception as e:
             print(f"⚠️ Warning initializing Groq model '{m}': {e}")
     return None
@@ -418,8 +432,9 @@ graph.add_edge("final_agent", END)
 # Checkpointer configuration with PostgreSQL & graceful in-memory fallback
 checkpointer = None
 try:
-    if PostgresSaver and DATABASE_URL and not DATABASE_URL.startswith("your_") and "postgres:postgres@" not in DATABASE_URL:
-        _conn = psycopg.connect(DATABASE_URL, autocommit=True)
+    db_url = get_config_val("DATABASE_URL")
+    if PostgresSaver and db_url and not db_url.startswith("your_") and "postgres:postgres@" not in db_url:
+        _conn = psycopg.connect(db_url, autocommit=True)
         checkpointer = PostgresSaver(_conn)
         checkpointer.setup()
         print("Connected to PostgreSQL checkpointer.")
