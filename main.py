@@ -429,44 +429,19 @@ graph.add_edge("weather_agent", "itinerary_agent")
 graph.add_edge("itinerary_agent", "final_agent")
 graph.add_edge("final_agent", END)
 
-# Checkpointer configuration with ConnectionPool & graceful fallback
-_compiled_app = None
-_pool = None
+# Checkpointer configuration: MemorySaver ensures reliable, high-speed cloud execution without serverless connection dropouts
+checkpointer = MemorySaver()
+app = graph.compile(checkpointer=checkpointer)
 
 
 def get_app():
-    """Return compiled LangGraph app with resilient checkpointer (ConnectionPool or MemorySaver)."""
-    global _compiled_app, _pool
-    if _compiled_app is not None:
-        return _compiled_app
-
-    checkpointer = None
-    db_url = get_config_val("DATABASE_URL")
-
-    if PostgresSaver and db_url and not db_url.startswith("your_") and "postgres:postgres@" not in db_url:
-        try:
-            from psycopg_pool import ConnectionPool
-            # ConnectionPool automatically reconnects and handles idle serverless timeouts
-            _pool = ConnectionPool(
-                conninfo=db_url,
-                min_size=1,
-                max_size=5,
-                kwargs={"autocommit": True, "prepare_threshold": 0}
-            )
-            checkpointer = PostgresSaver(_pool)
-            checkpointer.setup()
-            print("Connected to PostgreSQL checkpointer via ConnectionPool.")
-        except Exception as e:
-            print(f"⚠️ Warning initializing PostgreSQL checkpointer ({e}). Using in-memory checkpointer.")
-            checkpointer = MemorySaver()
-    else:
-        checkpointer = MemorySaver()
-
-    _compiled_app = graph.compile(checkpointer=checkpointer)
-    return _compiled_app
+    """Return compiled LangGraph travel planning app."""
+    return app
 
 
-app = get_app()
+def get_fallback_app():
+    """Return fallback LangGraph app."""
+    return app
 
 
 if __name__ == "__main__":

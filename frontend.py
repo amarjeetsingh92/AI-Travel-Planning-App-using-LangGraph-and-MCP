@@ -17,7 +17,7 @@ except Exception:
 
 from datetime import datetime
 from langchain_core.messages import HumanMessage
-from main import app, get_app, graph
+from main import app
 import auth
 
 # ── Page Configuration ─────────────────────────────────────────────────────────
@@ -541,8 +541,7 @@ def render_main_dashboard():
                     "final_agent": ("🧠", "Chief Concierge Agent", "Assembling executive proposal, budget estimates, and cost-saving tips..."),
                 }
 
-                # Resilient workflow execution with automatic fallback
-                active_app = get_app()
+                # Stream payload initialization
                 stream_payload = {
                     "messages": [HumanMessage(content=combined_query)],
                     "user_query": combined_query,
@@ -554,16 +553,11 @@ def render_main_dashboard():
                     "llm_calls": 0,
                 }
 
-                def run_stream_with_fallback(current_app):
-                    try:
-                        return current_app.stream(stream_payload, config=config, stream_mode="updates")
-                    except Exception as err:
-                        print(f"⚠️ App stream failed with checkpointer ({err}). Retrying with in-memory runner...")
-                        from langgraph.checkpoint.memory import MemorySaver
-                        fallback_app = graph.compile(checkpointer=MemorySaver())
-                        return fallback_app.stream(stream_payload, config=config, stream_mode="updates")
-
-                stream_iter = run_stream_with_fallback(active_app)
+                try:
+                    stream_iter = app.stream(stream_payload, config=config, stream_mode="updates")
+                except Exception as stream_init_err:
+                    print(f"⚠️ Stream init notice: {stream_init_err}")
+                    stream_iter = []
 
                 try:
                     for chunk in stream_iter:
